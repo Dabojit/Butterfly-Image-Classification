@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🦋 Butterfly Classifier</title>
+<style>
+  /* ── Reset & base ─────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0b0d1a;
+    --surface:   #111526;
+    --card:      #161c32;
+    --border:    #252d4a;
+    --accent:    #7c6dfa;
+    --accent2:   #38bdf8;
+    --green:     #34d399;
+    --red:       #f87171;
+    --text:      #dde3f5;
+    --muted:     #6b7498;
+    --radius:    14px;
+    --shadow:    0 8px 32px rgba(0,0,0,.45);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ───────────────────────────────────────────── */
+  header {
+    background: linear-gradient(135deg, #0f1428 0%, #1a1040 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 1.1rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: .6rem; }
+  .logo-icon { font-size: 1.8rem; }
+  .logo-text  { font-size: 1.2rem; font-weight: 700;
+    background: linear-gradient(135deg, #a78bfa, #38bdf8);
+    background-clip: text;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .header-right { display: flex; align-items: center; gap: .8rem; }
+
+  .status-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--red); display: inline-block;
+  }
+  .status-dot.online { background: var(--green);
+    box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse {
+    0%,100% { opacity:1 } 50% { opacity:.5 }
+  }
+  .status-text { font-size: .82rem; color: var(--muted); }
+  .badge {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 20px; padding: .25rem .8rem;
+    font-size: .78rem; color: var(--muted);
+  }
+
+  /* ── Layout ───────────────────────────────────────────── */
+  main {
+    flex: 1; max-width: 1100px; margin: 0 auto; width: 100%;
+    padding: 2rem 1.5rem;
+  }
+
+  /* ── Tabs ─────────────────────────────────────────────── */
+  .tabs { display: flex; gap: .4rem; margin-bottom: 1.8rem; flex-wrap: wrap; }
+  .tab-btn {
+    background: var(--card); border: 1px solid var(--border);
+    color: var(--muted); padding: .5rem 1.2rem; border-radius: 8px;
+    cursor: pointer; font-size: .9rem; transition: all .2s;
+  }
+  .tab-btn:hover { border-color: var(--accent); color: var(--text); }
+  .tab-btn.active {
+    background: var(--accent); border-color: var(--accent);
+    color: #fff; font-weight: 600;
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── Cards ────────────────────────────────────────────── */
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.5rem;
+    box-shadow: var(--shadow);
+  }
+
+  /* ── Drop zone ────────────────────────────────────────── */
+  .drop-zone {
+    border: 2px dashed var(--border); border-radius: var(--radius);
+    min-height: 200px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: .6rem;
+    cursor: pointer; transition: all .25s; padding: 2rem;
+    text-align: center;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent); background: rgba(124,109,250,.06);
+  }
+  .drop-zone .dz-icon { font-size: 2.8rem; }
+  .drop-zone .dz-title { font-size: 1rem; font-weight: 600; color: var(--text); }
+  .drop-zone .dz-sub   { font-size: .82rem; color: var(--muted); }
+  .drop-zone input[type=file] { display: none; }
+
+  /* ── Predict layout ───────────────────────────────────── */
+  .predict-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.5rem;
+  }
+  @media (max-width: 680px) { .predict-grid { grid-template-columns: 1fr; } }
+
+  .preview-box {
+    border-radius: var(--radius); overflow: hidden;
+    background: var(--surface); min-height: 260px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .preview-box img {
+    width: 100%; height: 100%; object-fit: contain; max-height: 340px;
+  }
+  .preview-placeholder { color: var(--muted); font-size: .9rem; text-align: center; padding: 1rem; }
+
+  /* ── Result card ──────────────────────────────────────── */
+  .result-empty {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 260px; color: var(--muted); font-size: .9rem;
+    flex-direction: column; gap: .5rem; text-align: center;
+  }
+  .result-species {
+    font-size: 1.5rem; font-weight: 700; color: var(--accent);
+    font-family: Georgia, serif; letter-spacing: .03em;
+    margin: .3rem 0;
+  }
+  .result-conf { font-size: 1rem; color: var(--green); margin-bottom: 1rem; }
+  .result-label { font-size: .72rem; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .1em; margin-bottom: .2rem; }
+
+  /* ── Bar chart ────────────────────────────────────────── */
+  .bar-list { display: flex; flex-direction: column; gap: .55rem; margin-top: .8rem; }
+  .bar-item  { display: flex; flex-direction: column; gap: .15rem; }
+  .bar-label { display: flex; justify-content: space-between;
+    font-size: .8rem; color: var(--muted); }
+  .bar-label span:last-child { color: var(--text); font-weight: 600; }
+  .bar-track { background: var(--surface); border-radius: 4px; height: 8px; overflow: hidden; }
+  .bar-fill  { height: 100%; border-radius: 4px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width .6s ease; }
+  .bar-item:first-child .bar-fill { background: linear-gradient(90deg, #a78bfa, #34d399); }
+
+  /* ── Buttons ──────────────────────────────────────────── */
+  .btn {
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .55rem 1.3rem; border-radius: 8px; border: none;
+    cursor: pointer; font-size: .9rem; font-weight: 600;
+    transition: all .2s; text-decoration: none;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #6a5bf0; transform: translateY(-1px); }
+  .btn-secondary { background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--accent); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; transform: none !important; }
+
+  .btn-row { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: 1.2rem; }
+
+  /* ── Top-K slider ─────────────────────────────────────── */
+  .slider-row {
+    display: flex; align-items: center; gap: .8rem;
+    margin-top: 1rem; font-size: .88rem; color: var(--muted);
+  }
+  input[type=range] { flex: 1; accent-color: var(--accent); }
+  .slider-val { color: var(--text); font-weight: 700; min-width: 1.5rem; }
+
+  /* ── Spinner ──────────────────────────────────────────── */
+  .spinner {
+    width: 36px; height: 36px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-state { display: flex; flex-direction: column; align-items: center;
+    gap: .8rem; color: var(--muted); font-size: .9rem; }
+
+  /* ── Alert ────────────────────────────────────────────── */
+  .alert {
+    padding: .8rem 1.1rem; border-radius: 10px; font-size: .88rem;
+    display: flex; align-items: flex-start; gap: .6rem; margin-top: 1rem;
+  }
+  .alert-warn { background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.3);
+    color: #fbbf24; }
+  .alert-err  { background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.3);
+    color: var(--red); }
+  .alert-ok   { background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.3);
+    color: var(--green); }
+
+  /* ── Batch grid ───────────────────────────────────────── */
+  .batch-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr));
+    gap: 1rem; margin-top: 1.2rem; }
+  .batch-card { background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden; }
+  .batch-img  { width: 100%; height: 140px; object-fit: cover; }
+  .batch-info { padding: .7rem .9rem; }
+  .batch-name { font-size: .72rem; color: var(--muted); overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .batch-species { font-size: .9rem; font-weight: 700; color: var(--accent);
+    margin: .2rem 0; }
+  .batch-conf { font-size: .8rem; color: var(--green); }
+
+  /* ── API docs ─────────────────────────────────────────── */
+  .endpoint-list { display: flex; flex-direction: column; gap: 1rem; }
+  .endpoint {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1rem 1.2rem;
+  }
+  .ep-head { display: flex; align-items: center; gap: .7rem; margin-bottom: .4rem; }
+  .ep-method {
+    background: var(--accent); color: #fff; font-size: .72rem;
+    font-weight: 700; padding: .15rem .5rem; border-radius: 4px;
+    font-family: monospace; letter-spacing: .05em;
+  }
+  .ep-method.get  { background: #059669; }
+  .ep-method.post { background: #7c6dfa; }
+  .ep-path { font-family: monospace; font-size: .9rem; color: var(--accent2); }
+  .ep-desc { font-size: .85rem; color: var(--muted); margin-bottom: .5rem; }
+  .ep-code {
+    background: #0a0c18; border: 1px solid var(--border); border-radius: 6px;
+    padding: .7rem 1rem; font-family: monospace; font-size: .8rem;
+    color: #94a3b8; overflow-x: auto; white-space: pre;
+  }
+
+  /* ── Section title ────────────────────────────────────── */
+  .section-title {
+    font-size: 1rem; font-weight: 700; color: var(--text);
+    margin-bottom: 1rem; display: flex; align-items: center; gap: .5rem;
+  }
+
+  /* ── Stats row ────────────────────────────────────────── */
+  .stats-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .stat-box {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: .7rem 1.2rem; flex: 1; min-width: 120px;
+    text-align: center;
+  }
+  .stat-num { font-size: 1.6rem; font-weight: 700; color: var(--accent2); }
+  .stat-lbl { font-size: .72rem; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .08em; }
+
+  /* ── Footer ───────────────────────────────────────────── */
+  footer {
+    text-align: center; padding: 1.2rem;
+    font-size: .78rem; color: var(--muted);
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <span class="logo-icon">🦋</span>
+    <span class="logo-text">Butterfly Classifier</span>
+  </div>
+  <div class="header-right">
+    <span class="status-dot" id="statusDot"></span>
+    <span class="status-text" id="statusText">Checking…</span>
+    <span class="badge" id="classBadge">— species</span>
+  </div>
+</header>
+
+<!-- ── Main ───────────────────────────────────────────────── -->
+<main>
+
+  <!-- Model warning -->
+  <div id="modelWarn" class="alert alert-warn" style="display:none;margin-bottom:1.2rem;">
+    ⚠️ <strong>Model not loaded.</strong>
+    Run <code>Model.ipynb</code> to train the model, then place
+    <code>best_butterfly_model.keras</code> in the project folder and
+    click <em>Reload Model</em>.
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-box">
+      <div class="stat-num">75</div>
+      <div class="stat-lbl">Species</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num">224²</div>
+      <div class="stat-lbl">Input Size</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num">EfficientNetB0</div>
+      <div class="stat-lbl">Architecture</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num" id="statRequests">0</div>
+      <div class="stat-lbl">Predictions Made</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('single', this)">🔍 Single Image</button>
+    <button class="tab-btn" onclick="switchTab('batch', this)">📦 Batch</button>
+    <button class="tab-btn" onclick="switchTab('api', this)">📡 API Docs</button>
+  </div>
+
+  <!-- ── TAB: Single ──────────────────────────────────────── -->
+  <div class="tab-panel active" id="tab-single">
+    <div class="card">
+      <div class="section-title">🖼️ Upload Image</div>
+
+      <!-- Drop zone -->
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <input type="file" id="fileInput" accept="image/*" onchange="onFileSelected(this.files[0])"/>
+        <span class="dz-icon">📁</span>
+        <span class="dz-title">Drop image here or click to browse</span>
+        <span class="dz-sub">JPG · PNG · WEBP — max 10 MB</span>
+      </div>
+
+      <!-- Top-K slider -->
+      <div class="slider-row">
+        <span>Top-K predictions:</span>
+        <input type="range" min="1" max="10" value="5" id="topKSlider"
+               oninput="document.getElementById('topKVal').textContent=this.value"/>
+        <span class="slider-val" id="topKVal">5</span>
+      </div>
+
+      <!-- Buttons -->
+      <div class="btn-row">
+        <button class="btn btn-primary" id="predictBtn" onclick="predictSingle()" disabled>
+          🔍 Predict
+        </button>
+        <button class="btn btn-secondary" onclick="clearSingle()">✕ Clear</button>
+        <button class="btn btn-secondary" onclick="reloadModel()">🔄 Reload Model</button>
+      </div>
+
+      <!-- Error -->
+      <div id="singleError" style="display:none"></div>
+
+      <!-- Result grid -->
+      <div class="predict-grid" id="predictGrid" style="display:none">
+        <div class="preview-box">
+          <img id="previewImg" src="" alt="preview"/>
+        </div>
+        <div class="card" id="resultBox">
+          <div class="result-empty" id="resultLoading" style="display:none">
+            <div class="spinner"></div>
+            <span>Identifying species…</span>
+          </div>
+          <div id="resultContent" style="display:none">
+            <div class="result-label">Predicted Species</div>
+            <div class="result-species" id="resSpecies"></div>
+            <div class="result-conf"   id="resConf"></div>
+            <div class="bar-list" id="barList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TAB: Batch ───────────────────────────────────────── -->
+  <div class="tab-panel" id="tab-batch">
+    <div class="card">
+      <div class="section-title">📦 Batch Prediction</div>
+
+      <div class="drop-zone" id="batchDrop" onclick="document.getElementById('batchInput').click()">
+        <input type="file" id="batchInput" accept="image/*" multiple
+               onchange="onBatchSelected(this.files)"/>
+        <span class="dz-icon">🗂️</span>
+        <span class="dz-title">Drop multiple images here</span>
+        <span class="dz-sub">Up to 20 images at once</span>
+      </div>
+
+      <div id="batchFileCount" style="margin-top:.8rem;font-size:.85rem;color:var(--muted);"></div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="batchBtn" onclick="predictBatch()" disabled>
+          📦 Run Batch
+        </button>
+        <button class="btn btn-secondary" onclick="clearBatch()">✕ Clear</button>
+      </div>
+
+      <div id="batchError" style="display:none;margin-top:.8rem;"></div>
+      <div id="batchResults"></div>
+    </div>
+  </div>
+
+  <!-- ── TAB: API Docs ────────────────────────────────────── -->
+  <div class="tab-panel" id="tab-api">
+    <div class="card">
+      <div class="section-title">📡 API Reference</div>
+      <p style="font-size:.88rem;color:var(--muted);margin-bottom:1.2rem;">
+        Base URL: <code style="color:var(--accent2)">http://localhost:5000</code>
+      </p>
+
+      <div class="endpoint-list">
+
+        <div class="endpoint">
+          <div class="ep-head">
+            <span class="ep-method get">GET</span>
+            <span class="ep-path">/health</span>
+          </div>
+          <div class="ep-desc">Check if server and model are ready.</div>
+          <div class="ep-code">curl http://localhost:5000/health</div>
+        </div>
+
+        <div class="endpoint">
+          <div class="ep-head">
+            <span class="ep-method get">GET</span>
+            <span class="ep-path">/info</span>
+          </div>
+          <div class="ep-desc">Get model info, class list, and all endpoints.</div>
+          <div class="ep-code">curl http://localhost:5000/info</div>
+        </div>
+
+        <div class="endpoint">
+          <div class="ep-head">
+            <span class="ep-method post">POST</span>
+            <span class="ep-path">/predict?top_k=5</span>
+          </div>
+          <div class="ep-desc">Predict species from an uploaded image file.</div>
+          <div class="ep-code">curl -X POST http://localhost:5000/predict \
+  -F "file=@butterfly.jpg" \
+  -G -d "top_k=5"</div>
+        </div>
+
+        <div class="endpoint">
+          <div class="ep-head">
+            <span class="ep-method post">POST</span>
+            <span class="ep-path">/predict_base64</span>
+          </div>
+          <div class="ep-desc">Predict from a base64-encoded image (JSON body).</div>
+          <div class="ep-code">curl -X POST http://localhost:5000/predict_base64 \
+  -H "Content-Type: application/json" \
+  -d '{"image": "&lt;base64_string&gt;", "top_k": 5}'</div>
+        </div>
+
+        <div class="endpoint">
+          <div class="ep-head">
+            <span class="ep-method post">POST</span>
+            <span class="ep-path">/predict_batch?top_k=3</span>
+          </div>
+          <div class="ep-desc">Predict multiple images in one request (max 20).</div>
+          <div class="ep-code">curl -X POST http://localhost:5000/predict_batch \
+  -F "files=@img1.jpg" \
+  -F "files=@img2.jpg"</div>
+        </div>
+
+        <div class="endpoint">
+          <div class="ep-head">
+            <span class="ep-method post">POST</span>
+            <span class="ep-path">/reload</span>
+          </div>
+          <div class="ep-desc">Hot-reload the model from disk (no restart needed).</div>
+          <div class="ep-code">curl -X POST http://localhost:5000/reload</div>
+        </div>
+
+      </div>
+
+      <!-- Response example -->
+      <div class="section-title" style="margin-top:1.5rem;">📋 Response Example</div>
+      <div class="ep-code">{
+  "success": true,
+  "filename": "monarch.jpg",
+  "predicted_class": "MONARCH",
+  "confidence": 0.9231,
+  "confidence_percent": 92.31,
+  "top_k": 5,
+  "predictions": [
+    {"rank": 1, "class": "MONARCH",  "confidence": 0.9231, "percentage": 92.31},
+    {"rank": 2, "class": "VICEROY",  "confidence": 0.0512, "percentage":  5.12},
+    {"rank": 3, "class": "JULIA",    "confidence": 0.0187, "percentage":  1.87},
+    {"rank": 4, "class": "MALACHITE","confidence": 0.0041, "percentage":  0.41},
+    {"rank": 5, "class": "PEACOCK",  "confidence": 0.0029, "percentage":  0.29}
+  ],
+  "timestamp": "2025-01-01T12:00:00"
+}</div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  🦋 Butterfly Classifier &nbsp;|&nbsp; EfficientNetB0 · TensorFlow/Keras
+  &nbsp;|&nbsp; Trained with <a href="#" style="color:var(--accent)">Model.ipynb</a>
+</footer>
+
+<!-- ── JS ─────────────────────────────────────────────────── -->
+<script>
+  let requestCount = 0;
+  let selectedFile = null;
+  let batchFiles   = [];
+  const apiBaseUrl = window.location.protocol.startsWith('http')
+    ? window.location.origin
+    : 'http://127.0.0.1:5000';
+
+  function apiUrl(path) {
+    return `${apiBaseUrl}${path}`;
+  }
+
+  // ── Tab switching ──────────────────────────────────────
+  function switchTab(name, btn) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    if (btn) btn.classList.add('active');
+  }
+
+  // ── Health check ───────────────────────────────────────
+  async function checkHealth() {
+    try {
+      const r = await fetch(apiUrl('/health'));
+      const d = await r.json();
+      const dot  = document.getElementById('statusDot');
+      const txt  = document.getElementById('statusText');
+      const bdg  = document.getElementById('classBadge');
+      const warn = document.getElementById('modelWarn');
+
+      if (d.model_loaded) {
+        dot.classList.add('online');
+        txt.textContent  = 'Model ready';
+        warn.style.display = 'none';
+      } else {
+        dot.classList.remove('online');
+        txt.textContent  = 'Model offline';
+        warn.style.display = 'flex';
+      }
+      bdg.textContent = d.num_classes + ' species';
+    } catch {
+      document.getElementById('statusText').textContent = 'Server offline';
+    }
+  }
+
+  // ── Single image ───────────────────────────────────────
+  function onFileSelected(file) {
+    if (!file) return;
+    selectedFile = file;
+
+    const grid = document.getElementById('predictGrid');
+    grid.style.display = 'grid';
+    document.getElementById('previewImg').src = URL.createObjectURL(file);
+    document.getElementById('predictBtn').disabled = false;
+    document.getElementById('resultContent').style.display  = 'none';
+    document.getElementById('resultLoading').style.display  = 'none';
+    document.getElementById('singleError').style.display    = 'none';
+  }
+
+  async function predictSingle() {
+    if (!selectedFile) return;
+
+    const topK = document.getElementById('topKSlider').value;
+    const errDiv = document.getElementById('singleError');
+    errDiv.style.display = 'none';
+
+    document.getElementById('resultLoading').style.display = 'flex';
+    document.getElementById('resultContent').style.display = 'none';
+    document.getElementById('predictBtn').disabled = true;
+
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+
+    try {
+      const r = await fetch(apiUrl(`/predict?top_k=${topK}`), { method: 'POST', body: fd });
+      const d = await r.json();
+
+      document.getElementById('resultLoading').style.display = 'none';
+
+      if (!r.ok || !d.success) {
+        errDiv.innerHTML = `<div class="alert alert-err">❌ ${d.error || 'Prediction failed.'}</div>`;
+        errDiv.style.display = 'block';
+        return;
+      }
+
+      // Fill result
+      document.getElementById('resSpecies').textContent = d.predicted_class;
+      document.getElementById('resConf').textContent    = `${d.confidence_percent}% confidence`;
+
+      // Bar chart
+      const barList = document.getElementById('barList');
+      barList.innerHTML = '';
+      d.predictions.forEach(p => {
+        const item = document.createElement('div');
+        item.className = 'bar-item';
+        item.innerHTML = `
+          <div class="bar-label">
+            <span>#${p.rank} ${p.class}</span>
+            <span>${p.percentage}%</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:${p.percentage}%"></div>
+          </div>`;
+        barList.appendChild(item);
+      });
+
+      document.getElementById('resultContent').style.display = 'block';
+      requestCount++;
+      document.getElementById('statRequests').textContent = requestCount;
+
+    } catch (e) {
+      document.getElementById('resultLoading').style.display = 'none';
+      errDiv.innerHTML = `<div class="alert alert-err">❌ Network error: ${e.message}</div>`;
+      errDiv.style.display = 'block';
+    }
+
+    document.getElementById('predictBtn').disabled = false;
+  }
+
+  function clearSingle() {
+    selectedFile = null;
+    document.getElementById('fileInput').value = '';
+    document.getElementById('predictGrid').style.display = 'none';
+    document.getElementById('predictBtn').disabled = true;
+    document.getElementById('singleError').style.display = 'none';
+  }
+
+  // ── Batch ──────────────────────────────────────────────
+  function onBatchSelected(files) {
+    batchFiles = Array.from(files);
+    const cnt  = document.getElementById('batchFileCount');
+    cnt.textContent = `${batchFiles.length} file(s) selected.`;
+    document.getElementById('batchBtn').disabled = batchFiles.length === 0;
+    document.getElementById('batchError').style.display = 'none';
+    document.getElementById('batchResults').innerHTML = '';
+  }
+
+  async function predictBatch() {
+    if (!batchFiles.length) return;
+    const topK   = document.getElementById('topKSlider').value;
+    const errDiv = document.getElementById('batchError');
+    const resDiv = document.getElementById('batchResults');
+    errDiv.style.display = 'none';
+    resDiv.innerHTML = '<div class="loading-state" style="margin:1.5rem 0"><div class="spinner"></div><span>Processing batch…</span></div>';
+    document.getElementById('batchBtn').disabled = true;
+
+    const fd = new FormData();
+    batchFiles.forEach(f => fd.append('files', f));
+
+    try {
+      const r = await fetch(apiUrl(`/predict_batch?top_k=${topK}`), { method: 'POST', body: fd });
+      const d = await r.json();
+
+      if (!r.ok || !d.success) {
+        resDiv.innerHTML = '';
+        errDiv.innerHTML = `<div class="alert alert-err">❌ ${d.error || 'Batch failed.'}</div>`;
+        errDiv.style.display = 'block';
+        return;
+      }
+
+      // Render batch cards
+      const grid = document.createElement('div');
+      grid.className = 'batch-results';
+
+      d.results.forEach((item, i) => {
+        const card = document.createElement('div');
+        card.className = 'batch-card';
+        const imgSrc = URL.createObjectURL(batchFiles[i]);
+        card.innerHTML = `
+          <img class="batch-img" src="${imgSrc}" alt="${item.filename}"/>
+          <div class="batch-info">
+            <div class="batch-name">${item.filename}</div>
+            <div class="batch-species">${item.predicted_class}</div>
+            <div class="batch-conf">${item.confidence_percent}%</div>
+          </div>`;
+        grid.appendChild(card);
+      });
+
+      resDiv.innerHTML = '';
+      const summary = document.createElement('div');
+      summary.innerHTML = `<div class="alert alert-ok" style="margin-top:.8rem;">
+        ✅ Processed ${d.processed} image(s) successfully.</div>`;
+      resDiv.appendChild(summary);
+      resDiv.appendChild(grid);
+
+      requestCount += d.processed;
+      document.getElementById('statRequests').textContent = requestCount;
+
+    } catch (e) {
+      resDiv.innerHTML = '';
+      errDiv.innerHTML = `<div class="alert alert-err">❌ Network error: ${e.message}</div>`;
+      errDiv.style.display = 'block';
+    }
+
+    document.getElementById('batchBtn').disabled = false;
+  }
+
+  function clearBatch() {
+    batchFiles = [];
+    document.getElementById('batchInput').value = '';
+    document.getElementById('batchFileCount').textContent = '';
+    document.getElementById('batchResults').innerHTML = '';
+    document.getElementById('batchBtn').disabled = true;
+  }
+
+  // ── Reload model ───────────────────────────────────────
+  async function reloadModel() {
+    try {
+      const r = await fetch(apiUrl('/reload'), { method: 'POST' });
+      const d = await r.json();
+      if (d.model_loaded) {
+        alert('✅ Model reloaded successfully!');
+        checkHealth();
+      } else {
+        alert('⚠️ Reload failed — model file not found.\nRun Model.ipynb first.');
+      }
+    } catch {
+      alert('❌ Could not reach server.');
+    }
+  }
+
+  // ── Drag & drop ────────────────────────────────────────
+  ['dropZone', 'batchDrop'].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener('dragover',  e => { e.preventDefault(); el.classList.add('drag-over'); });
+    el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+    el.addEventListener('drop', e => {
+      e.preventDefault(); el.classList.remove('drag-over');
+      const files = e.dataTransfer.files;
+      if (id === 'dropZone') onFileSelected(files[0]);
+      else onBatchSelected(files);
+    });
+  });
+
+  // ── Init ───────────────────────────────────────────────
+  checkHealth();
+  setInterval(checkHealth, 30000);
+</script>
+</body>
+</html>
